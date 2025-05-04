@@ -65,7 +65,7 @@ To determine which of many possible URLs is worth analyzing, the tool uses GPT t
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/ai-vpd-scanner.git
+git clone https://github.com/c-leitner/AI-VDP-Scanner.git
 cd ai-vpd-scanner
 ```
 
