@@ -1,0 +1,7 @@
+openai
+requests
+pdfplumber
+beautifulsoup4
+googlesearch-python
+sectxt
+python-dotenv
