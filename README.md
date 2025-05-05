@@ -170,6 +170,13 @@ MIT License. See [LICENSE](LICENSE) for more details.
 
 ## 🙌 Acknowledgments
 
-- [OpenAI API](https://platform.openai.com/)
-- [Google Programmable Search Engine](https://programmablesearchengine.google.com/)
-- [security.txt Standard](https://securitytxt.org/)
+This project relies on the following open-source libraries and APIs:
+
+- [OpenAI API](https://platform.openai.com/) – GPT-4o for policy analysis and confidence scoring  
+- [Playwright for Python](https://playwright.dev/python/) – Headless browser automation for JavaScript-rendered pages (e.g., HackerOne)  
+- [Requests](https://docs.python-requests.org/) – Robust HTTP client for fetching web and PDF content  
+- [pdfplumber](https://github.com/jsvine/pdfplumber) – PDF parsing and text extraction  
+- [BeautifulSoup (bs4)](https://www.crummy.com/software/BeautifulSoup/) – HTML parsing and content cleanup  
+- [google-search-results-python](https://github.com/abenassi/google-search-results-python) – Google Programmable Search API wrapper  
+- [sectxt](https://pypi.org/project/sectxt/) – Standard-compliant parser for `security.txt` files  
+- [python-dotenv](https://github.com/theskumar/python-dotenv) – Loads environment variables from `.env` files  
