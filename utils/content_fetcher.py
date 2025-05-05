@@ -11,7 +11,7 @@ class ContentFetcher:
 
     def fetch_content(self, url):
         """
-        Fetch the HTML or text content of the given URL, including PDFs.
+        Fetch the content of the given URL. Returns a dict with 'raw' and 'text' for HTML, or just plain text for PDFs.
         """
         try:
             self.logger.info(f"Fetching content from {url}")
@@ -22,12 +22,16 @@ class ContentFetcher:
 
             if 'application/pdf' in content_type:
                 content_length = len(response.content)
-                return self._handle_pdf(response, url, content_length)
-            elif content_type.startswith('text/'):
-                return self._handle_html(response.text, url)
-            else:
-                self.logger.warning(f"Unsupported content type at {url}: {content_type}")
+                pdf_text = self._handle_pdf(response, url, content_length)
+                if pdf_text:
+                    return {"raw": None, "text": pdf_text}
                 return None
+            else:
+                raw_html, clean_text = self._fetch_html_with_playwright(url)
+                if raw_html and clean_text:
+                    return {"raw": raw_html, "text": clean_text}
+                return None
+
         except requests.RequestException as e:
             self.logger.error(f"Error fetching content from {url}: {e}")
             return None
@@ -51,35 +55,46 @@ class ContentFetcher:
             return None
 
 
-    def _handle_html(self, html_content, url):
+    def _fetch_html_with_playwright(self, url):
         """
-        Handle HTML content by extracting plain text.
-        Uses Playwright for dynamic JS-rendered content if needed.
+        Use Playwright to fetch HTML content and return both raw HTML and cleaned plain text.
         """
         try:
-            self.logger.info(f"Parsing HTML content from {url}")
+            self.logger.info(f"Using Playwright to render HTML content from {url}")
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=False)
+                context = browser.new_context()
+                page = context.new_page()
+                page.goto(url, timeout=10000)
+                page.wait_for_load_state("load")
 
-            if "hackerone.com" in url.lower():
-                self.logger.info(f"Using Playwright for JS-rendered content at {url}")
-                with sync_playwright() as p:
-                    browser = p.chromium.launch(headless=True)
-                    page = browser.new_page()
-                    page.goto(url, timeout=20000)
-                    page.wait_for_load_state('networkidle')
-                    content = page.content()
-                    browser.close()
-            else:
-                # Fallback to static HTML
-                decoded_content = html_content.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
-                content = decoded_content
+                raw_html = page.content()
 
-            soup = BeautifulSoup(content, 'html.parser')
+                # Ensure everything closes properly
+                page.close()
+                context.close()
+                browser.close()
+
+
+            soup = BeautifulSoup(raw_html, 'html.parser')
             text = soup.get_text(separator="\n").strip()
-            return " ".join(text.split())
+            clean_text = " ".join(text.split())
+
+            return raw_html, clean_text
 
         except Exception as e:
-            self.logger.error(f"Error processing HTML at {url}: {e}")
-            return None
+            self.logger.warning(f"Playwright failed for {url}: {e}. Falling back to requests.")
+            try:
+                response = requests.get(url, timeout=10)
+                response.raise_for_status()
+                raw_html = response.text
+                soup = BeautifulSoup(raw_html, 'html.parser')
+                text = soup.get_text(separator="\n").strip()
+                clean_text = " ".join(text.split())
+                return raw_html, clean_text
+            except Exception as fallback_error:
+                self.logger.error(f"Fallback fetch also failed for {url}: {fallback_error}")
+                return None, None
 
     @staticmethod
     def _extract_text_from_pdf(pdf_content):

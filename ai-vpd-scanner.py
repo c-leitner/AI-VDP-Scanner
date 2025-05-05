@@ -7,6 +7,7 @@ from utils.security_txt_handler import SecurityTxtHandler
 from utils.google_search_handler import GoogleSearchHandler
 from utils.content_fetcher import ContentFetcher
 from utils.chatgpt_analyzer import ChatGPTAnalyzer
+from utils.sitemap_handler import SitemapHandler
 from utils.logger import Logger
 
 
@@ -20,6 +21,7 @@ class AIVPDScanner:
         self.google_search_handler = GoogleSearchHandler(google_api_key, cse_id, logger)
         self.content_fetcher = ContentFetcher(logger)
         self.chatgpt_analyzer = ChatGPTAnalyzer(openai_api_key, logger)
+        self.sitemap_handler = SitemapHandler(logger)
 
     def process_company(self, company_name, base_url):
         """
@@ -38,32 +40,58 @@ class AIVPDScanner:
             security_txt_url, policy_url, source = self.security_txt_handler.check_security_txt(base_url)
             analysis_result["security_txt_url"] = security_txt_url or ""
             analysis_result["policy_url"] = policy_url or ""
+            if policy_url:
+                highest_confidence = 1
 
-            # Step 2: Fallback to Google search if no policy URL found
-            if not policy_url or not security_txt_url:
-                urls, source = self.google_search_handler.search(base_url, company_name, [
-                    "vulnerability disclosure policy",
-                    "bug bounty program",
-                    "vdp",
-                    "Reporting a vulnerability",
-                    "PSIRT",
-                    "Responsible Disclosure"
-                ])
-                analysis_result["google_search_results"] = urls
-                
+            #Step 2: Check sitemaps and robots
+
+            if not policy_url:
+                urls = self.sitemap_handler.discover_and_filter_urls(base_url,)
+
+                self.logger.info(f"Found {len(urls)} candidate URLs from sitemap for {company_name}")
+
                 policy_url, highest_confidence = self._fetch_and_find_best_url(company_name, urls)
                 analysis_result["policy_url"] = policy_url or ""
-                analysis_result["highest_confidence"] = highest_confidence
+
+            if highest_confidence <= 0.6:
+                self.logger.warning(f"No strong match found in sitemap (max confidence: {highest_confidence}). Falling back to Google.")
+                policy_url = None
+                # Step 2a: Fallback to Google search if no policy URL found
+                if not policy_url or not security_txt_url:
+                    urls, source = self.google_search_handler.search(base_url, company_name, [
+                        "vulnerability disclosure policy",
+                        "bug bounty program",
+                        "vdp",
+                        "Reporting a vulnerability",
+                        "PSIRT",
+                        "Responsible Disclosure"
+                    ])
+                    analysis_result["google_search_results"] = urls
+                    
+                    policy_url, highest_confidence = self._fetch_and_find_best_url(company_name, urls)
+                    analysis_result["policy_url"] = policy_url or ""
+                    analysis_result["highest_confidence"] = highest_confidence
 
             # Step 3: Fetch content from the policy URL
-            content = self.content_fetcher.fetch_content(policy_url) if policy_url else None
-            if not content:
-                self.logger.warning(f"No content fetched for {policy_url}")
-                analysis_result["analysis"] = {}
+
+            if not policy_url:
                 return analysis_result
+            else:
+                content = self.content_fetcher.fetch_content(policy_url)
+                
+                if not content:
+                    self.logger.warning(f"No content fetched for {policy_url}")
+                    analysis_result["analysis"] = {}
+                    return analysis_result
+
+                clean_text = content.get("text", "")
+                if not clean_text:
+                    self.logger.warning(f"Empty text content at {policy_url}")
+                    analysis_result["analysis"] = {}
+                    return analysis_result
 
             # Step 4: Analyze content with ChatGPT
-            gpt_analysis = self.chatgpt_analyzer.analyze_content(content, company_name, policy_url)
+            gpt_analysis = self.chatgpt_analyzer.analyze_content(clean_text, company_name, policy_url)
             analysis_result["analysis"] = gpt_analysis
 
             # Step 5: Assess probability of policy presence

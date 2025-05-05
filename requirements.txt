@@ -6,3 +6,4 @@ googlesearch-python
 sectxt
 python-dotenv
 playwright
+ultimate-sitemap-parser

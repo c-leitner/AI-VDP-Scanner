@@ -189,24 +189,13 @@ class ChatGPTAnalyzer:
         Use GPT to assess the probability that the content contains a vulnerability disclosure policy.
         Returns a confidence score between 0 and 1.
         """
+        raw_html = content.get("raw", "")
+        clean_text = content.get("text", "")
         try:
-            # --- Special handling for hackerone.com (dynamic content) ---
+            # --- Special handling for hackerone.com (based on already rendered content) ---
             if "hackerone.com" in url.lower():
-                self.logger.info(f"Rendering HackerOne page for full content: {url}")
-                try:
-                    with sync_playwright() as p:
-                        browser = p.chromium.launch(headless=True)
-                        page = browser.new_page()
-                        page.goto(url, timeout=20000)
-                        page.wait_for_load_state("networkidle")
-                        rendered_html = page.content()
-                        browser.close()
-                except Exception as e:
-                    self.logger.warning(f"Failed to render HackerOne page with Playwright: {e}")
-                    rendered_html = content  # fallback to provided HTML
-
-                soup = BeautifulSoup(rendered_html, 'html.parser')
-
+                self.logger.info(f"Analyzing HackerOne page content at {url}")
+                soup = BeautifulSoup(raw_html, 'html.parser')
                 # Check for external program indicators
                 meta_tag = soup.find("meta", {"name": "description", "class": "spec-external-unclaimed"})
                 external_span = soup.find("span", class_="font-bold", string=lambda s: s and "external program" in s.lower())
@@ -221,7 +210,7 @@ class ChatGPTAnalyzer:
             # --- Standard GPT-4o analysis ---
             prompt = (
                 f"Analyze this content for {company_name}:\n\n"
-                f"{content[:5000]}\n\n"
+                f"{clean_text[:5000]}\n\n"
                 "Return a confidence score (float 0-1) indicating how likely it includes a vulnerability disclosure policy/bug bounty program."
             )
 

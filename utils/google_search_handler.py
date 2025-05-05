@@ -37,7 +37,7 @@ class GoogleSearchHandler:
                     for item in search_results["items"]:
                         cleaned_url = self.clean_url(item["link"])
                         all_results.add(cleaned_url)
-                        self.logger.info(f"Google search result found: {cleaned_url}")
+                        self.logger.debug(f"Google search result found: {cleaned_url}")
                 else:
                     self.logger.warning(f"No results found for query: {query}")
 
@@ -130,7 +130,8 @@ class GoogleSearchHandler:
             "finance", "annual-report", "csr", "sustainability", "sustainable",
             "sitemap", "site-map", "taxonomy", "environmental-report", "company-reports",
             "sustainable-environmentally", "responsible-sourcing", "financial-disclosures",
-            "climate", "eviroment", "esg", "cookie", "privacy", "blog", "music", "video"
+            "climate", "eviroment", "esg", "cookie", "privacy", "blog", "music", "video", "suppliers", "efpia",
+            "clinical", "song", "episode", "remix"
         ]
 
         EXTERNAL_VDP_DOMAINS = ["intigriti.com", "hackerone.com"]
@@ -147,7 +148,7 @@ class GoogleSearchHandler:
 
 
             if any(bad in url_lc for bad in DISALLOWED_KEYWORDS):
-                self.logger.info(f"✘ Filtering out URL {url}: matched disallowed keyword.")
+                self.logger.debug(f"✘ Filtering out URL {url}: matched disallowed keyword.")
                 return False
 
             # --- Remove legal suffixes ---
@@ -176,7 +177,7 @@ class GoogleSearchHandler:
                 self.logger.info(f"✔ Keeping external URL {url} (matched external source + company word + keyword).")
                 return True
             else:
-                self.logger.info(f"✘ Filtering out URL {url}: "
+                self.logger.debug(f"✘ Filtering out URL {url}: "
                                 f"{'no keyword match' if not has_keyword else ''} "
                                 f"{'no base domain match' if not base_match else ''} "
                                 f"{'no company match' if not company_in_path else ''} "
