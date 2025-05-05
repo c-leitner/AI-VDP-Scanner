@@ -81,6 +81,17 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### 4. Install Playwright Browsers (for dynamic content)
+
+This project uses Playwright to render JavaScript-heavy pages like HackerOne.
+
+After installing the Python package, install the browser binaries:
+
+```bash
+playwright install
+```
+This command must be run once after setup.
+
 ---
 
 ## 🔐 .env Configuration

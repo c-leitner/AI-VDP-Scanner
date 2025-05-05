@@ -1,5 +1,7 @@
 from openai import OpenAI
 import json
+from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 class ChatGPTAnalyzer:
     def __init__(self, api_key, logger):
@@ -188,14 +190,25 @@ class ChatGPTAnalyzer:
         Returns a confidence score between 0 and 1.
         """
         try:
-            # Special handling for hackerone.com
+            # --- Special handling for hackerone.com (dynamic content) ---
             if "hackerone.com" in url.lower():
-                soup = BeautifulSoup(content, 'html.parser')
+                self.logger.info(f"Rendering HackerOne page for full content: {url}")
+                try:
+                    with sync_playwright() as p:
+                        browser = p.chromium.launch(headless=True)
+                        page = browser.new_page()
+                        page.goto(url, timeout=20000)
+                        page.wait_for_load_state("networkidle")
+                        rendered_html = page.content()
+                        browser.close()
+                except Exception as e:
+                    self.logger.warning(f"Failed to render HackerOne page with Playwright: {e}")
+                    rendered_html = content  # fallback to provided HTML
 
-                # Case 1: meta tag check
+                soup = BeautifulSoup(rendered_html, 'html.parser')
+
+                # Check for external program indicators
                 meta_tag = soup.find("meta", {"name": "description", "class": "spec-external-unclaimed"})
-
-                # Case 2: span tag with "External Program"
                 external_span = soup.find("span", class_="font-bold", string=lambda s: s and "external program" in s.lower())
 
                 if meta_tag or external_span:
@@ -204,20 +217,19 @@ class ChatGPTAnalyzer:
                 else:
                     self.logger.info(f"HackerOne URL {url} identified as an internal program. Confidence: 1.0")
                     return 1.0
-            self.logger.info(f"Assessing probability of policy presence for {company_name}.")
-            if any(keyword in url.lower() for keyword in ["blog","site-map", "taxonomy", "sitemap", "environmental-report", "annual-report", "sustainable","sustainability","company-reports","sustainable-environmentally","responsible-sourcing","financial-disclosures","climate","eviroment","ESG"]):
-                self.logger.info(f"URL {url} identified as a non-policy page (site-map, report, etc.). Assigning confidence 0.0.")
-                return 0.0
+
+            # --- Standard GPT-4o analysis ---
             prompt = (
                 f"Analyze this content for {company_name}:\n\n"
-                f"{content:5000}\n\n"
-                "Return a confidence score (float 0-1) indicating how likely it includes a vulnerability disclosure policy/bug bounty programm."
+                f"{content[:5000]}\n\n"
+                "Return a confidence score (float 0-1) indicating how likely it includes a vulnerability disclosure policy/bug bounty program."
             )
 
             response = self.client.chat.completions.create(
-                messages=[{"role": "system", "content": "You are a cybersecurity policy analyzer."},
-                          {"role": "user", "content": prompt}
-                ],     
+                messages=[
+                    {"role": "system", "content": "You are a cybersecurity policy analyzer."},
+                    {"role": "user", "content": prompt}
+                ],
                 response_format={
                     "type": "json_schema",
                     "json_schema": {
@@ -225,20 +237,19 @@ class ChatGPTAnalyzer:
                         "schema": {
                             "type": "object",
                             "properties": {
-                                "confidence": {
-                                "type": "number"
-                                }
+                                "confidence": {"type": "number"}
                             }
                         }
                     }
                 },
                 model="gpt-4o",
             )
+
             response_content = response.choices[0].message.content
             parsed_response = json.loads(response_content)
             confidence = parsed_response.get("confidence", 0)
-            # Parse and return the confidence score
             return max(0.0, min(1.0, float(confidence)))
+
         except Exception as e:
             self.logger.error(f"Error assessing probability for {company_name}: {e}")
             return 0.0

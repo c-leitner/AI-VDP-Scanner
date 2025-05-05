@@ -2,6 +2,7 @@ import requests
 import pdfplumber
 from bs4 import BeautifulSoup
 import io
+from playwright.sync_api import sync_playwright
 
 class ContentFetcher:
     def __init__(self, logger, pdf_size_limit_mb=1):
@@ -49,20 +50,33 @@ class ContentFetcher:
             self.logger.error(f"Error processing PDF at {url}: {e}")
             return None
 
+
     def _handle_html(self, html_content, url):
         """
         Handle HTML content by extracting plain text.
+        Uses Playwright for dynamic JS-rendered content if needed.
         """
         try:
             self.logger.info(f"Parsing HTML content from {url}")
 
-            # Explicitly decode the HTML content, ignoring errors
-            decoded_content = html_content.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+            if "hackerone.com" in url.lower():
+                self.logger.info(f"Using Playwright for JS-rendered content at {url}")
+                with sync_playwright() as p:
+                    browser = p.chromium.launch(headless=True)
+                    page = browser.new_page()
+                    page.goto(url, timeout=20000)
+                    page.wait_for_load_state('networkidle')
+                    content = page.content()
+                    browser.close()
+            else:
+                # Fallback to static HTML
+                decoded_content = html_content.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+                content = decoded_content
 
-            # Parse the HTML using BeautifulSoup
-            soup = BeautifulSoup(decoded_content, 'html.parser')
+            soup = BeautifulSoup(content, 'html.parser')
             text = soup.get_text(separator="\n").strip()
             return " ".join(text.split())
+
         except Exception as e:
             self.logger.error(f"Error processing HTML at {url}: {e}")
             return None

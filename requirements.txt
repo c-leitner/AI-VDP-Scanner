@@ -5,3 +5,4 @@ beautifulsoup4
 googlesearch-python
 sectxt
 python-dotenv
+playwright

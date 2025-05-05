@@ -127,8 +127,10 @@ class GoogleSearchHandler:
             "career", "careers", "jobs", "job", "vacancy", "recruit",
             "stellenangebot", "karriere", "position", "openings", "hiring",
             "work-with-us", "jobportal", "news", "press", "media", "investor",
-            "finance", "annual-report", "csr", "sustainability", "sitemap",
-            "cookie", "privacy", "blog", "music", "video"
+            "finance", "annual-report", "csr", "sustainability", "sustainable",
+            "sitemap", "site-map", "taxonomy", "environmental-report", "company-reports",
+            "sustainable-environmentally", "responsible-sourcing", "financial-disclosures",
+            "climate", "eviroment", "esg", "cookie", "privacy", "blog", "music", "video"
         ]
 
         EXTERNAL_VDP_DOMAINS = ["intigriti.com", "hackerone.com"]
