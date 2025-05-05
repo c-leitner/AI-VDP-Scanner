@@ -131,7 +131,7 @@ class GoogleSearchHandler:
             "sitemap", "site-map", "taxonomy", "environmental-report", "company-reports",
             "sustainable-environmentally", "responsible-sourcing", "financial-disclosures",
             "climate", "eviroment", "esg", "cookie", "privacy", "blog", "music", "video", "suppliers", "efpia",
-            "clinical", "song", "episode", "remix"
+            "clinical", "song", "episode", "remix", "security.txt"
         ]
 
         EXTERNAL_VDP_DOMAINS = ["intigriti.com", "hackerone.com"]
