@@ -55,8 +55,7 @@ GPT responds in a **validated JSON schema format**, which is then cleaned (e.g.,
 To determine which of many possible URLs is worth analyzing, the tool uses GPT to assign a **confidence score (0 to 1)** indicating how likely a page is to contain a valid vulnerability disclosure or bug bounty policy.
 
 - Pages with confidence **above 0.6** are considered
-- The one with the **highest score** is selected
-- URLs known to be irrelevant (e.g., sitemaps, ESG reports) are automatically scored `0.0`
+- The one with the **highest score** is selected<<<<<<<<
 
 ---
 

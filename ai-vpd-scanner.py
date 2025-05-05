@@ -44,10 +44,10 @@ class AIVPDScanner:
                 urls, source = self.google_search_handler.search(base_url, company_name, [
                     "vulnerability disclosure policy",
                     "bug bounty program",
-                    "vulnerability response",
                     "vdp",
                     "Reporting a vulnerability",
-                    "PSIRT"
+                    "PSIRT",
+                    "Responsible Disclosure"
                 ])
                 analysis_result["google_search_results"] = urls
                 
@@ -93,6 +93,10 @@ class AIVPDScanner:
                     confidence = self.chatgpt_analyzer.analyze_probability(content, company_name, url)
                     self.logger.info(f"Confidence for {url}: {confidence}")
                     
+                    if confidence == 1.0:
+                        self.logger.info(f"URL {url} has perfect confidence. Selecting and stopping search.")
+                        return url, confidence
+
                     # Only consider URLs with confidence above the threshold
                     if confidence > confidence_threshold:
                         if confidence > highest_confidence:

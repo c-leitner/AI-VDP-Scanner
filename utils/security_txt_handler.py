@@ -23,6 +23,13 @@ class SecurityTxtHandler:
                 if line.get('field_name') == 'policy':
                     self.logger.info(f"Found policy in security.txt for {base_url}")
                     return security_txt_url, line.get('value'), "security.txt"
+                        # Fallback to contact field (only if it's a URL)
+            for line in lines:
+                if line.get('field_name') == 'contact':
+                    value = line.get('value', '')
+                    if value.startswith("http"):
+                        self.logger.info(f"No 'policy' field found. Using 'contact' as fallback for {base_url}")
+                        return security_txt_url, value, "security.txt"
 
             self.logger.info(f"No policy found in security.txt for {base_url}")
             return security_txt_url, None, "security.txt"

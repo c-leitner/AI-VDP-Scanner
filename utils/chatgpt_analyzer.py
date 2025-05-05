@@ -23,7 +23,7 @@ class ChatGPTAnalyzer:
                 "- contact_url: If a form is provided, URL of the form\n"
                 "- safe_harbor: Safe harbor clause (if no legal action = full) (full, partial, empty)\n"
                 "- offers_swag: Swag (goodies) offered (boolean)\n"
-                "- disclosure_timeline_days: Disclosure timeline (number in days, empty if not specified)\n"
+                "- disclosure_timeline_days: Disclosure timeline (number in days, 0 if not specifically stated)\n"
                 "- public_disclosure: If public disclosure is offered (nda, discretionary, coordinated)\n"
                 "- pgp_keys_provided: URL to PGP key or 'self' if the key is in the content\n"
                 "- offers_bounty: Bounties offered (yes, no, partial)\n"
@@ -170,7 +170,7 @@ class ChatGPTAnalyzer:
                     }
                 elif isinstance(d, list):
                     return [recursive_cleanup(item) for item in d if item not in ("", None)]
-                elif isinstance(d, str) and d == "self":
+                elif isinstance(d, str) and d.strip().lower() == "self":
                     return policy_url  # Replace "self" with policy URL
                 else:
                     return d
@@ -190,25 +190,28 @@ class ChatGPTAnalyzer:
         try:
             # Special handling for hackerone.com
             if "hackerone.com" in url.lower():
-                from bs4 import BeautifulSoup
                 soup = BeautifulSoup(content, 'html.parser')
 
-                # Check for the specific meta tag
+                # Case 1: meta tag check
                 meta_tag = soup.find("meta", {"name": "description", "class": "spec-external-unclaimed"})
-                if meta_tag:
+
+                # Case 2: span tag with "External Program"
+                external_span = soup.find("span", class_="font-bold", string=lambda s: s and "external program" in s.lower())
+
+                if meta_tag or external_span:
                     self.logger.info(f"HackerOne URL {url} identified as 'External Program'. Confidence: 0.0")
                     return 0.0
                 else:
                     self.logger.info(f"HackerOne URL {url} identified as an internal program. Confidence: 1.0")
                     return 1.0
             self.logger.info(f"Assessing probability of policy presence for {company_name}.")
-            if any(keyword in url.lower() for keyword in ["site-map", "sitemap", "environmental-report", "annual-report", "company-reports","sustainable-environmentally","responsible-sourcing","financial-disclosures","climate","eviroment","ESG"]):
+            if any(keyword in url.lower() for keyword in ["blog","site-map", "taxonomy", "sitemap", "environmental-report", "annual-report", "sustainable","sustainability","company-reports","sustainable-environmentally","responsible-sourcing","financial-disclosures","climate","eviroment","ESG"]):
                 self.logger.info(f"URL {url} identified as a non-policy page (site-map, report, etc.). Assigning confidence 0.0.")
                 return 0.0
             prompt = (
                 f"Analyze this content for {company_name}:\n\n"
                 f"{content:5000}\n\n"
-                "Return a confidence score (0-1) indicating how likely it contains a vulnerability disclosure policy/bug bounty programm."
+                "Return a confidence score (float 0-1) indicating how likely it includes a vulnerability disclosure policy/bug bounty programm."
             )
 
             response = self.client.chat.completions.create(
