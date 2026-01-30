@@ -231,7 +231,7 @@ class ChatGPTAnalyzer:
                         }
                     }
                 },
-                model="gpt-4o",
+                model="gpt-5.2",
             )
 
             response_content = response.choices[0].message.content

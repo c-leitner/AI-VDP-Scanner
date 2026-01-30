@@ -2,7 +2,8 @@ import requests
 import pdfplumber
 from bs4 import BeautifulSoup
 import io
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+import time
 
 class ContentFetcher:
     def __init__(self, logger, pdf_size_limit_mb=1):
@@ -57,26 +58,40 @@ class ContentFetcher:
 
     def _fetch_html_with_playwright(self, url):
         """
-        Use Playwright to fetch HTML content and return both raw HTML and cleaned plain text.
+        Use Playwright to fetch fully rendered HTML content.
+        Tries hard to wait until JS-heavy pages are actually stable.
         """
         try:
             self.logger.info(f"Using Playwright to render HTML content from {url}")
+
             with sync_playwright() as p:
-                browser = p.chromium.launch(headless=False)
+                browser = p.chromium.launch(headless=True)
                 context = browser.new_context()
                 page = context.new_page()
-                page.goto(url, timeout=10000)
-                page.wait_for_load_state("load")
+
+                # 1️⃣ Navigate
+                page.goto(url, timeout=20000)
+
+                # 2️⃣ Wait until network is mostly quiet
+                # This is MUCH better than "load"
+                try:
+                    page.wait_for_load_state("networkidle", timeout=15000)
+                except PlaywrightTimeoutError:
+                    self.logger.debug("networkidle timeout – continuing anyway")
+
+                # 3️⃣ Optional: wait for DOM to stabilize (no size changes)
+                self._wait_for_dom_stability(page, timeout=5000)
+
+                # 4️⃣ Small safety delay (last async JS, CMP banners, etc.)
+                page.wait_for_timeout(1000)
 
                 raw_html = page.content()
 
-                # Ensure everything closes properly
                 page.close()
                 context.close()
                 browser.close()
 
-
-            soup = BeautifulSoup(raw_html, 'html.parser')
+            soup = BeautifulSoup(raw_html, "html.parser")
             text = soup.get_text(separator="\n").strip()
             clean_text = " ".join(text.split())
 
@@ -88,13 +103,27 @@ class ContentFetcher:
                 response = requests.get(url, timeout=10)
                 response.raise_for_status()
                 raw_html = response.text
-                soup = BeautifulSoup(raw_html, 'html.parser')
+                soup = BeautifulSoup(raw_html, "html.parser")
                 text = soup.get_text(separator="\n").strip()
                 clean_text = " ".join(text.split())
                 return raw_html, clean_text
             except Exception as fallback_error:
                 self.logger.error(f"Fallback fetch also failed for {url}: {fallback_error}")
                 return None, None
+    def _wait_for_dom_stability(self, page, timeout=5000, poll_interval=500):
+        """
+        Wait until the DOM size stops changing.
+        This catches late JS rendering, SPAs, consent banners, etc.
+        """
+        end_time = time.time() + (timeout / 1000)
+        last_size = None
+
+        while time.time() < end_time:
+            size = page.evaluate("document.body.innerHTML.length")
+            if size == last_size:
+                return
+            last_size = size
+            page.wait_for_timeout(poll_interval)
 
     @staticmethod
     def _extract_text_from_pdf(pdf_content):

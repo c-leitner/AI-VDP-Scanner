@@ -38,7 +38,7 @@ Acme Corp,https://acme.io
 
 ### 🔍 `analyze_content(...)` – Structured Extraction
 
-Once a policy page is identified, its content is passed to GPT-4o. The model is instructed to extract:
+Once a policy page is identified, its content is passed to GPT-5.2. The model is instructed to extract:
 
 - `policy_url`, `contact_email`, `contact_url`
 - `safe_harbor`, `offers_bounty`, `offers_swag`

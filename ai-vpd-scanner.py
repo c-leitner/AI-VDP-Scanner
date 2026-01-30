@@ -4,7 +4,7 @@ import argparse
 from dotenv import load_dotenv
 import os
 from utils.security_txt_handler import SecurityTxtHandler
-from utils.google_search_handler import GoogleSearchHandler
+from utils.brave_search_handler import BraveSearchHandler
 from utils.content_fetcher import ContentFetcher
 from utils.chatgpt_analyzer import ChatGPTAnalyzer
 from utils.sitemap_handler import SitemapHandler
@@ -12,13 +12,13 @@ from utils.logger import Logger
 
 
 class AIVPDScanner:
-    def __init__(self, openai_api_key, google_api_key, cse_id, logger):
+    def __init__(self, openai_api_key, brave_api_key, logger):
         """
         Initialize the AI-VDP-Scanner with necessary components.
         """
         self.logger = logger
         self.security_txt_handler = SecurityTxtHandler(logger)
-        self.google_search_handler = GoogleSearchHandler(google_api_key, cse_id, logger)
+        self.brave_search_handler = BraveSearchHandler(brave_api_key,logger)
         self.content_fetcher = ContentFetcher(logger)
         self.chatgpt_analyzer = ChatGPTAnalyzer(openai_api_key, logger)
         self.sitemap_handler = SitemapHandler(logger)
@@ -27,7 +27,7 @@ class AIVPDScanner:
         """
         Process a single company:
         - Check `security.txt`
-        - Perform Google search as fallback
+        - Perform Brave search as fallback
         - Fetch content from URLs
         - Analyze content with ChatGPT
         Returns structured JSON with analysis results.
@@ -45,20 +45,20 @@ class AIVPDScanner:
 
             #Step 2: Check sitemaps and robots
 
-            if not policy_url:
-                urls = self.sitemap_handler.discover_and_filter_urls(base_url,)
+            #if not policy_url:
+            #    urls = self.sitemap_handler.discover_and_filter_urls(base_url,)
 
-                self.logger.info(f"Found {len(urls)} candidate URLs from sitemap for {company_name}")
+            #   self.logger.info(f"Found {len(urls)} candidate URLs from sitemap for {company_name}")
 
-                policy_url, highest_confidence = self._fetch_and_find_best_url(company_name, urls)
-                analysis_result["policy_url"] = policy_url or ""
+            #    policy_url, highest_confidence = self._fetch_and_find_best_url(company_name, urls)
+            #    analysis_result["policy_url"] = policy_url or ""
 
             if highest_confidence <= 0.6:
-                self.logger.warning(f"No strong match found in sitemap (max confidence: {highest_confidence}). Falling back to Google.")
+                self.logger.warning(f"No strong match found in sitemap (max confidence: {highest_confidence}). Falling back to Brave.")
                 policy_url = None
-                # Step 2a: Fallback to Google search if no policy URL found
+                # Step 2a: Fallback to GooglBravee search if no policy URL found
                 if not policy_url or not security_txt_url:
-                    urls, source = self.google_search_handler.search(base_url, company_name, [
+                    urls, source = self.brave_search_handler.search(base_url, company_name, [
                         "vulnerability disclosure policy",
                         "bug bounty program",
                         "vdp",
@@ -66,7 +66,7 @@ class AIVPDScanner:
                         "PSIRT",
                         "Responsible Disclosure"
                     ])
-                    analysis_result["google_search_results"] = urls
+                    analysis_result["brave_search_results"] = urls
                     
                     policy_url, highest_confidence = self._fetch_and_find_best_url(company_name, urls)
                     analysis_result["policy_url"] = policy_url or ""
@@ -180,11 +180,10 @@ if __name__ == "__main__":
 
     # Configuration
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")  # Replace with your OpenAI API key or place in .env file
-    GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")  # Replace with your Google API key or place in .env file
-    CSE_ID = os.getenv("CSE_ID")       # Replace with your Google CSE ID or place in .env file
+    BRAVE_API_KEY = os.getenv("BRAVE_API_KEY")  # Replace with your BRAVE API key or place in .env file
 
     logger = Logger("Logs/ai-vpd-scanner.log")
 
     # Initialize and run the PolicyAnalyzer
-    scanner = AIVPDScanner(OPENAI_API_KEY, GOOGLE_API_KEY, CSE_ID, logger)
+    scanner = AIVPDScanner(OPENAI_API_KEY, BRAVE_API_KEY, logger)
     scanner.process_csv(args.input, args.output)

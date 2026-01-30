@@ -1,10 +1,25 @@
+import requests
+from requests.adapters import HTTPAdapter
+from usp.web_client.requests_client import RequestsWebClient
 from usp.tree import sitemap_tree_for_homepage
 from urllib.parse import urlparse
 import re
 
 class SitemapHandler:
-    def __init__(self, logger):
+    def __init__(self, logger, timeout_seconds=10):
         self.logger = logger
+        self.web_client = self._make_usp_client(timeout_seconds)
+
+    
+    def _make_usp_client(self, timeout_seconds):
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=0)
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+
+        client = RequestsWebClient(session=session, wait=0.0, random_wait=False)
+        client.set_timeout(timeout_seconds)
+        return client
 
     def discover_and_filter_urls(self, base_url):
         """
@@ -45,9 +60,11 @@ class SitemapHandler:
         relevant_urls = []
 
         try:
+            if base_url == "bmw.at":
+                return[]
             self.logger.info(f"Trying to discover sitemaps for: {base_url}")
             full_url = self._normalize_url(base_url)
-            tree = sitemap_tree_for_homepage(full_url)
+            tree = sitemap_tree_for_homepage(full_url, web_client=self.web_client)
 
             if tree is None:
                 self.logger.warning(f"No sitemap tree found for {base_url}")
@@ -74,18 +91,40 @@ class SitemapHandler:
         Remove URLs that match disallowed keywords, language-locales, or years (1990–2025) anywhere in the URL.
         """
         DISALLOWED_KEYWORDS = [
+            # Careers / HR
             "career", "careers", "jobs", "job", "vacancy", "recruit",
             "stellenangebot", "karriere", "position", "openings", "hiring",
-            "work-with-us", "jobportal", "news", "press", "media", "investor",
-            "finance", "annual-report", "csr", "sustainability", "sustainable",
-            "sitemap", "site-map", "taxonomy", "environmental-report", "company-reports",
-            "sustainable-environmentally", "responsible-sourcing", "financial-disclosures",
-            "climate", "eviroment", "esg", "cookie", "privacy", "blog", "music",
-            "video", "suppliers", "efpia", "clinical", "what-we-do", "employer",
-            "concert", "gig", "livestream", "photostory", "watch", "playlist",
-            "gallery", "festival", "event", "events", "episodes", "song", "remix", "hazardous",
-            "goods", "by-design", "supply", "forming", "location", "certificate", "discoveries",
-            "new", "webinar", "whitepaper", "basics", "certifi", "notes", "presentation"
+            "work-with-us", "jobportal", "employer",
+
+            # News / Media / Content
+            "news", "press", "media", "newsroom", "blog", "articles",
+            "story", "stories", "answers",
+
+            # Marketing / Events
+            "event", "events", "webinar", "livestream", "concert", "gig",
+            "festival", "presentation", "whitepaper", "infographics",
+            "watch", "playlist", "gallery", "photostory", "episodes",
+            "song", "remix", "video",
+
+            # Corporate / Investor / ESG
+            "investor", "finance", "annual-report", "company-reports",
+            "csr", "sustainability", "sustainable", "esg", "climate",
+            "environmental-report", "responsible-sourcing",
+            "financial-disclosures",
+
+            # Legal / Generic
+            "privacy", "cookie","imprint",
+
+            # Sitemap / Structural
+            "sitemap", "site-map", "taxonomy", "discoveries", "new",
+            "basics", "notes", "certificate", "certifi", "dealer-certs","landingpages"
+
+            # Product / Supply / Sales
+            "suppliers", "supply", "goods", "hazardous", "by-design",
+            "forming", "location", "what-we-do",
+
+            # Industry / Medical / Other
+            "clinical", "efpia", "parenting",
         ]
 
         DISALLOWED_PATH_FRAGMENTS = [
