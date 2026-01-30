@@ -1,14 +1,14 @@
 # 🛡️ AI-VPD-Scanner
 
-**AI-VPD-Scanner** is an intelligent Python crawler that identifies and analyzes **vulnerability disclosure policies (VDPs)** and **bug bounty programs** from company websites using `security.txt`, Google search, and GPT-4o.
+**AI-VPD-Scanner** is an intelligent Python crawler that identifies and analyzes **vulnerability disclosure policies (VDPs)** and **bug bounty programs** from company websites using `security.txt`, Brave search, and GPT-5.2.
 
 ---
 
 ## 🚀 Features
 
 - Automatically identifies `security.txt` and VDP pages from company websites
-- Uses **Google Custom Search** as a fallback to locate disclosure policy URLs
-- Fetches and analyzes content using **OpenAI’s GPT-4o**
+- Uses **Brave Search** as a fallback to locate disclosure policy URLs
+- Fetches and analyzes content using **OpenAI’s GPT-5.2**
 - Extracts structured fields:
   - Contact email/form
   - Safe harbor clause
