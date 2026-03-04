@@ -4,11 +4,13 @@ from bs4 import BeautifulSoup
 import io
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
 import time
+from readability import Document
 
 class ContentFetcher:
     def __init__(self, logger, pdf_size_limit_mb=1):
         self.logger = logger
         self.pdf_size_limit_mb = pdf_size_limit_mb
+
 
     def fetch_content(self, url):
         """
@@ -55,7 +57,6 @@ class ContentFetcher:
             self.logger.error(f"Error processing PDF at {url}: {e}")
             return None
 
-
     def _fetch_html_with_playwright(self, url):
         """
         Use Playwright to fetch fully rendered HTML content.
@@ -66,7 +67,14 @@ class ContentFetcher:
 
             with sync_playwright() as p:
                 browser = p.chromium.launch(headless=True)
-                context = browser.new_context()
+                context = browser.new_context(
+                    user_agent=(
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/122.0.0.0 Safari/537.36"
+                    ),
+                    locale="en-US",
+                )
                 page = context.new_page()
 
                 # 1️⃣ Navigate
@@ -91,9 +99,7 @@ class ContentFetcher:
                 context.close()
                 browser.close()
 
-            soup = BeautifulSoup(raw_html, "html.parser")
-            text = soup.get_text(separator="\n").strip()
-            clean_text = " ".join(text.split())
+            clean_text = self.extract_clean_text_from_html(raw_html)
 
             return raw_html, clean_text
 
@@ -110,6 +116,8 @@ class ContentFetcher:
             except Exception as fallback_error:
                 self.logger.error(f"Fallback fetch also failed for {url}: {fallback_error}")
                 return None, None
+    
+
     def _wait_for_dom_stability(self, page, timeout=5000, poll_interval=500):
         """
         Wait until the DOM size stops changing.
@@ -124,6 +132,7 @@ class ContentFetcher:
                 return
             last_size = size
             page.wait_for_timeout(poll_interval)
+
 
     @staticmethod
     def _extract_text_from_pdf(pdf_content):
@@ -141,3 +150,71 @@ class ContentFetcher:
         except Exception as e:
             raise RuntimeError(f"Error extracting text from PDF: {e}")
             return None
+        
+    @staticmethod    
+    def extract_clean_text_from_html(raw_html: str) -> str:
+        IMPORTANT_SELECTORS = [
+            "main",
+            "article",
+            "[role=main]",
+            "#content",
+            ".content",
+            ".main",
+            ".main-content",
+            ".page-content",
+            ".container",
+        ]
+
+        IMPORTANT_KEYWORDS = [
+            "vulnerability",
+            "bug bounty",
+            "responsible disclosure",
+            "coordinated disclosure",
+            "scope",
+            "out of scope",
+            "report",
+            "security contact",
+            "psirt",
+        ]
+
+        soup_full = BeautifulSoup(raw_html, "html.parser")
+
+        # -------- 1) Readability (high precision) --------
+        readable_text = ""
+        try:
+            doc = Document(raw_html)
+            readable_html = doc.summary(html_partial=True)
+            soup_readable = BeautifulSoup(readable_html, "html.parser")
+            readable_text = soup_readable.get_text(separator="\n").strip()
+        except Exception:
+            readable_text = ""
+
+        # -------- 2) Semantic DOM extraction (high recall) --------
+        semantic_chunks = []
+
+        for sel in IMPORTANT_SELECTORS:
+            for el in soup_full.select(sel):
+                text = el.get_text(separator="\n").strip()
+                if len(text) > 200:
+                    semantic_chunks.append(text)
+
+        semantic_text = "\n".join(semantic_chunks)
+
+        # -------- 3) Fallback: keyword-driven blocks --------
+        keyword_chunks = []
+        full_text = soup_full.get_text(separator="\n").lower()
+
+        if any(k in full_text for k in IMPORTANT_KEYWORDS):
+            keyword_chunks.append(soup_full.get_text(separator="\n"))
+
+        # -------- 4) Merge intelligently --------
+        combined = "\n".join([
+            readable_text,
+            semantic_text,
+            "\n".join(keyword_chunks)
+        ])
+
+        # -------- 5) Cleanup --------
+        clean = " ".join(combined.split())
+
+        return clean

@@ -137,7 +137,7 @@ class ChatGPTAnalyzer:
                         }
                     }
                 },
-                model="gpt-4o",
+                model="gpt-5.2",
             )
 
             # Parse and return the structured JSON response
@@ -196,22 +196,55 @@ class ChatGPTAnalyzer:
             if "hackerone.com" in url.lower():
                 self.logger.info(f"Analyzing HackerOne page content at {url}")
                 soup = BeautifulSoup(raw_html, 'html.parser')
-                # Check for external program indicators
-                meta_tag = soup.find("meta", {"name": "description", "class": "spec-external-unclaimed"})
-                external_span = soup.find("span", class_="font-bold", string=lambda s: s and "external program" in s.lower())
+
+                # Existing external-program detection
+                meta_tag = soup.find("meta", {
+                    "name": "description",
+                    "class": "spec-external-unclaimed"
+                })
+
+                external_span = soup.find(
+                    "span",
+                    class_="font-bold",
+                    string=lambda s: s and "external program" in s.lower()
+                )
+
+                # NEW: detect profile pages (dynamic classes, so match attributes/text)
+                profile_span = soup.find(
+                    "span",
+                    attrs={
+                        "title": "Profile",
+                        "data-text": "Profile"
+                    }
+                )
+
+                profile_text = soup.find(
+                    "span",
+                    string=lambda s: s and s.strip().lower() == "profile"
+                )
 
                 if meta_tag or external_span:
-                    self.logger.info(f"HackerOne URL {url} identified as 'External Program'. Confidence: 0.0")
+                    self.logger.info(
+                        f"HackerOne URL {url} identified as 'External Program'. Confidence: 0.0"
+                    )
                     return 0.0
-                else:
-                    self.logger.info(f"HackerOne URL {url} identified as an internal program. Confidence: 1.0")
-                    return 1.0
 
-            # --- Standard GPT-4o analysis ---
+                if profile_span or profile_text:
+                    self.logger.info(
+                        f"HackerOne URL {url} identified as a profile page. Confidence: 0.0"
+                    )
+                    return 0.0
+
+                self.logger.info(
+                    f"HackerOne URL {url} identified as an internal program. Confidence: 0.7"
+                )
+                return 0.7
+
+            # --- Standard GPT-5.2 analysis ---
             prompt = (
                 f"Analyze this content for {company_name}:\n\n"
                 f"{clean_text[:5000]}\n\n"
-                "Return a confidence score (float 0-1) indicating how likely it includes a vulnerability disclosure policy/bug bounty program."
+                "Return a confidence score (float 0-1) indicating how likely it includes a vulnerability disclosure policy/bug bounty program of {company_name}."
             )
 
             response = self.client.chat.completions.create(

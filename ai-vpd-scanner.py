@@ -9,6 +9,7 @@ from utils.content_fetcher import ContentFetcher
 from utils.chatgpt_analyzer import ChatGPTAnalyzer
 from utils.sitemap_handler import SitemapHandler
 from utils.logger import Logger
+from urllib.parse import urlparse
 
 
 class AIVPDScanner:
@@ -35,7 +36,7 @@ class AIVPDScanner:
         try:
             self.logger.info(f"Processing company: {company_name} ({base_url})")
             analysis_result = {"company_name": company_name, "base_url": base_url}
-
+            highest_confidence = 0
             # Step 1: Check for security.txt
             security_txt_url, policy_url, source = self.security_txt_handler.check_security_txt(base_url)
             analysis_result["security_txt_url"] = security_txt_url or ""
@@ -56,7 +57,7 @@ class AIVPDScanner:
             if highest_confidence <= 0.6:
                 self.logger.warning(f"No strong match found in sitemap (max confidence: {highest_confidence}). Falling back to Brave.")
                 policy_url = None
-                # Step 2a: Fallback to GooglBravee search if no policy URL found
+                # Step 2a: Fallback to Brave search if no policy URL found
                 if not policy_url or not security_txt_url:
                     urls, source = self.brave_search_handler.search(base_url, company_name, [
                         "vulnerability disclosure policy",
@@ -104,43 +105,81 @@ class AIVPDScanner:
             self.logger.error(f"Error processing company {company_name} ({base_url}): {e}")
             return {"company_name": company_name, "base_url": base_url, "error": str(e)}
 
+
     def _fetch_and_find_best_url(self, company_name, urls):
         """
         Fetch content from multiple URLs and calculate confidence for each.
-        Return the URL with the highest confidence above the threshold of 0.6.
+        Return the URL with the highest confidence above threshold.
         """
+
         try:
             highest_confidence = 0.0
             best_url = None
-            confidence_threshold = 0.6  # Minimum acceptable confidence score
+            confidence_threshold = 0.6
 
             for url in urls:
                 self.logger.info(f"Fetching and analyzing content from {url} for {company_name}")
-                content = self.content_fetcher.fetch_content(url)
-                if content:
-                    confidence = self.chatgpt_analyzer.analyze_probability(content, company_name, url)
-                    self.logger.info(f"Confidence for {url}: {confidence}")
-                    
-                    if confidence == 1.0:
-                        self.logger.info(f"URL {url} has perfect confidence. Selecting and stopping search.")
-                        return url, confidence
 
-                    # Only consider URLs with confidence above the threshold
-                    if confidence > confidence_threshold:
-                        if confidence > highest_confidence:
-                            highest_confidence = confidence
-                            best_url = url
-                    else:
-                        self.logger.info(f"URL {url} rejected due to low confidence: {confidence}")
+                host = (urlparse(url).hostname or "").lower()
+
+                content = self.content_fetcher.fetch_content(url)
+
+                # --- fallback for blocked ResponsibleDisclosure portals ---
+                is_synack_portal = (
+                    host.endswith("responsibledisclosure.com")
+                    or host.endswith("synack.com")
+                    or host.startswith("responsibledisclosure.")
+                )
+
+                if not content and is_synack_portal:
+                    self.logger.info(
+                        f"ResponsibleDisclosure portal blocked fetch, keeping candidate: {url}"
+                    )
+
+                    # Treat portal presence as decent confidence
+                    confidence = 0.7
+
+                else:
+                    if not content:
+                        self.logger.info(f"No content fetched for {url}, skipping.")
+                        continue
+
+                    confidence = self.chatgpt_analyzer.analyze_probability(
+                        content, company_name, url
+                    )
+
+                self.logger.info(f"Confidence for {url}: {confidence}")
+
+                if confidence == 1.0:
+                    self.logger.info(
+                        f"URL {url} has perfect confidence. Selecting and stopping search."
+                    )
+                    return url, confidence
+
+                if confidence > confidence_threshold:
+                    if confidence > highest_confidence:
+                        highest_confidence = confidence
+                        best_url = url
+                else:
+                    self.logger.info(
+                        f"URL {url} rejected due to low confidence: {confidence}"
+                    )
 
             if best_url:
-                self.logger.info(f"Best URL selected: {best_url} with confidence {highest_confidence}")
+                self.logger.info(
+                    f"Best URL selected: {best_url} with confidence {highest_confidence}"
+                )
             else:
-                self.logger.warning(f"No suitable URL found for {company_name} with confidence above {confidence_threshold}.")
+                self.logger.warning(
+                    f"No suitable URL found for {company_name} with confidence above {confidence_threshold}."
+                )
 
             return best_url, highest_confidence
+
         except Exception as e:
-            self.logger.error(f"Error fetching and analyzing URLs for {company_name}: {e}")
+            self.logger.error(
+                f"Error fetching and analyzing URLs for {company_name}: {e}"
+            )
             return None, 0.0
 
     def process_csv(self, input_csv, output_json):

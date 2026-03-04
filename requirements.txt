@@ -2,8 +2,9 @@ openai
 requests
 pdfplumber
 beautifulsoup4
-googlesearch-python
 sectxt
 python-dotenv
 playwright
 ultimate-sitemap-parser
+readability-lxml 
+lxml
